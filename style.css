@@ -1,0 +1,28 @@
+ul {
+	max-height: 200px;
+	overflow: auto;
+}
+ul,li {
+	list-style: none;
+	padding:0 0.5em;
+}
+iframe {
+	min-height: 2000px;
+	border: 0;
+}
+textarea {
+	height: 100px;
+}
+.wide {
+	width: 100%;
+}
+.left {
+	position: absolute;
+	top:0;
+	left:0;
+	width: 250px;
+}
+.right {
+	position: relative;
+	margin-left: 300px;
+}
