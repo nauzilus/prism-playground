@@ -112,7 +112,8 @@
 		}
 	}
 	var loadAsset = function(src, doc) {
-		doc = doc || iframe.contentDocument || document;
+		// oh the hacks! Array.map(loadAsset) means doc will be an index, so just ignore
+		doc = (typeof doc === "number" ? 0 : doc) || iframe.contentDocument || document;
 		var xtn = (src.toLowerCase().match(/\.(css|js)$/)||[,''])[1];
 		if (!xtn) return Promise.reject(src);
 
@@ -198,7 +199,7 @@
 			// general theme CSS must be loaded before any plugin CSS
 			getFiles("themes", themeName).css.map(loadAsset);
 
-			loadAsset("components/prism-core.js", iframe.contentDocument).then(function() {
+			loadAsset("components/prism-core.js").then(function() {
 				return Promise.all($$("input[name='languages']:checked").reduce(function(p, input){
 					$u.element.create("option",{
 						inside:langselect,
