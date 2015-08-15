@@ -1,8 +1,30 @@
 (function() {
+	var treePromise = null;
 	var defaultBaseUrl = "http://prismjs.com/"
 	var getConfig = function() {
 		try {
 			var config = JSON.parse(localStorage["config"]);
+			var repo = config.baseUrl.match("https://github.com/([^/]+)/([^/]+)/tree/([^/]+)(?:/|$)");
+			if (repo) {
+				config.baseUrl = "https://api.github.com/repos/"+repo[1]+"/"+repo[2]+"/git/trees/"+repo[3]+"?recursive=1";
+			}
+			config.isRepo = config.baseUrl.match("https://api.github.*recursive");
+			if (config.isRepo) {
+				treePromise = new Promise(function(resolve) {
+					$u.xhr({
+						url: config.baseUrl,
+						callback: function(xhr) {
+							if (xhr.status < 400) {
+								resolve(JSON.parse(xhr.responseText).tree.reduce(function(dict,v) {
+									dict[v.path] = v.url;
+									return dict;
+								}, {}));
+							}
+						}
+					});
+				});
+			}
+
 		} catch(error) {
 			var config = {
 				first: true,
@@ -59,26 +81,70 @@
 		if (!promises[lang]) {
 			promises[lang] = Promise.all(components.languages[lang].require.map(loadLanguage)).then(function() {
 				var files = getFiles('languages', lang);
-				files.css.map(loadCss);
-				return Promise.all(files.js.map(loadScript));
+				files.css.map(loadAsset);
+				return Promise.all(files.js.map(loadAsset));
 			});
 		}
 		return promises[lang];
 	};
-	var loadScript = function(src, doc) {
-		return new Promise(function(resolve,reject) {
-			var script = document.createElement("script");
-			script.src = src;
-			script.onload = ping(resolve,src);
-			script.onerror = ping(reject,src,true);
-			(doc || iframe.contentDocument).head.appendChild(script);
-		});
+	var pathOrContent = function(src) {
+		if (config.isRepo) {
+			return treePromise.then(function(paths) {
+				if (paths[src]) {
+					return new Promise(function(resolve, reject) {
+						$u.xhr({
+							url: paths[src],
+							callback: function(xhr) {
+								if (xhr.status < 400 && xhr.responseText) {
+									resolve([atob(JSON.parse(xhr.responseText).content)]);
+								} else {
+									reject();
+								}
+							}
+						});
+					});
+				}
+				return Promise.reject(src);
+			});
+		}
+		else {
+			return Promise.resolve(src);
+		}
 	}
-	var loadCss = function(path) {
-		var css = iframe.contentDocument.createElement("link");
-		css.rel = "stylesheet";
-		css.href = path;
-		iframe.contentDocument.head.appendChild(css);
+	var loadAsset = function(src, doc) {
+		doc = doc || iframe.contentDocument || document;
+		var xtn = (src.toLowerCase().match(/\.(css|js)$/)||[,''])[1];
+		if (!xtn) return Promise.reject(src);
+
+		return pathOrContent(src).then(function(result) {
+			return new Promise(function(resolve,reject) {
+				if (typeof result === "string") {
+					if (xtn === "js") {
+						var script = doc.createElement("script");
+						script.src = src;
+						script.onload = ping(resolve,src);
+						script.onerror = ping(reject,src,true);
+						doc.head.appendChild(script);
+					}
+					else if (xtn === "css") {
+						var css = doc.createElement("link");
+						css.rel = "stylesheet";
+						css.href = src;
+						doc.head.appendChild(css);
+						Promise.resolve(src);
+					}
+				}
+				else {
+					if (xtn === "js") {
+						$u.element.create("script",{inside:doc.head,contents:result[0]});
+					}
+					else if (xtn === "css") {
+						$u.element.create("style",{inside:doc.head,contents:result[0]});
+					}
+					resolve(src);
+				}
+			});
+		});
 	};
 
 	var getFiles = function(category, id) {
@@ -122,15 +188,17 @@
 		iframe = $u.element.create("iframe",{inside:output,className:"wide"});
 
 		timer = setTimeout(function() {
-			$u.element.create("base",{
-				inside:iframe.contentDocument.head,
-				prop:{href:config.baseUrl}
-			});
+			if (!config.isRepo) {
+				$u.element.create("base",{
+					inside:iframe.contentDocument.head,
+					prop:{href:config.baseUrl}
+				});
+			}
 
 			// general theme CSS must be loaded before any plugin CSS
-			getFiles("themes", themeName).css.map(loadCss);
+			getFiles("themes", themeName).css.map(loadAsset);
 
-			loadScript("components/prism-core.js", iframe.contentDocument).then(function() {
+			loadAsset("components/prism-core.js", iframe.contentDocument).then(function() {
 				return Promise.all($$("input[name='languages']:checked").reduce(function(p, input){
 					$u.element.create("option",{
 						inside:langselect,
@@ -145,15 +213,14 @@
 			}).then(function() {
 				return Promise.all($$("input[name='plugins']:checked").reduce(function(p, input){
 					var files = getFiles(input.name, input.value);
-					files.css.map(loadCss)
-					return p.concat(files.js.map(loadScript));
+					files.css.map(loadAsset)
+					return p.concat(files.js.map(loadAsset));
 				}, []));
 			}).then(updateCode)
 		}, 10);
 	}
 
 	var updateCode = function() {
-
 		var body = $("body", iframe.contentDocument);
 		while (body.childNodes.length)
 			body.childNodes[0].remove();
@@ -216,7 +283,7 @@
 		})
 	};
 
-	loadScript(config.baseUrl + "components.js", document).then(function() {
+	loadAsset((config.isRepo ? "" : config.baseUrl) + "components.js", document).then(function() {
 		Object.keys(components.languages).filter(notMeta).forEach(function(lang) {
 			components.languages[lang].children = components.languages[lang].children || [];
 			components.languages[lang].require = [].concat(components.languages[lang].require || []);
