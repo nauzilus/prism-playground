@@ -172,7 +172,7 @@
 
 	var generateFileList = function() {
 		promises = {};
-		var themeName = $$("input[name='themes']:checked,input[name='themes']")[0].value;
+		var themeName = ($("input[name='themes']:checked") || $("input[name='themes']")).value;
 		config.theme = themeName.replace(/^prism-?/, "") || "default";
 		
 		var langwas = langselect.value || localStorage["language"];
