@@ -6,25 +6,9 @@
 			var config = JSON.parse(localStorage["config"]);
 			var repo = config.baseUrl.match("https://github.com/([^/]+)/([^/]+)/tree/([^/]+)(?:/|$)");
 			if (repo) {
-				config.baseUrl = "https://api.github.com/repos/"+repo[1]+"/"+repo[2]+"/git/trees/"+repo[3]+"?recursive=1";
+				config.baseUrl = "https://raw.githubusercontent.com/"+repo[1]+"/"+repo[2]+"/"+repo[3]+"/";
 			}
-			config.isRepo = config.baseUrl.match("https://api.github.*recursive");
-			if (config.isRepo) {
-				treePromise = new Promise(function(resolve) {
-					$u.xhr({
-						url: config.baseUrl,
-						callback: function(xhr) {
-							if (xhr.status < 400) {
-								resolve(JSON.parse(xhr.responseText).tree.reduce(function(dict,v) {
-									dict[v.path] = v.url;
-									return dict;
-								}, {}));
-							}
-						}
-					});
-				});
-			}
-
+			config.isRaw = config.baseUrl.match("githubusercontent");
 		} catch(error) {
 			var config = {
 				first: true,
@@ -87,65 +71,60 @@
 		}
 		return promises[lang];
 	};
-	var pathOrContent = function(src) {
-		if (config.isRepo) {
-			return treePromise.then(function(paths) {
-				if (paths[src]) {
-					return new Promise(function(resolve, reject) {
-						$u.xhr({
-							url: paths[src],
-							callback: function(xhr) {
-								if (xhr.status < 400 && xhr.responseText) {
-									resolve([atob(JSON.parse(xhr.responseText).content)]);
-								} else {
-									reject();
-								}
-							}
-						});
-					});
+	var getRawContent = function(src) {
+		console.log("getRawContent",src);
+		return new Promise(function(resolve, reject) {
+			$u.xhr({
+				url: config.baseUrl + src,
+				callback: function(xhr) {
+					if (xhr.status < 400 && xhr.responseText) {
+						resolve(xhr.responseText);
+					} else {
+						reject(src);
+					}
 				}
-				return Promise.reject(src);
 			});
-		}
-		else {
-			return Promise.resolve(src);
-		}
+		});
 	}
 	var loadAsset = function(src, doc) {
+		src = config.baseUrl + src;
 		// oh the hacks! Array.map(loadAsset) means doc will be an index, so just ignore
 		doc = (typeof doc === "number" ? 0 : doc) || iframe.contentDocument || document;
 		var xtn = (src.toLowerCase().match(/\.(css|js)$/)||[,''])[1];
 		if (!xtn) return Promise.reject(src);
 
-		return pathOrContent(src).then(function(result) {
-			return new Promise(function(resolve,reject) {
-				if (typeof result === "string") {
-					if (xtn === "js") {
-						var script = doc.createElement("script");
-						script.src = src;
-						script.onload = ping(resolve,src);
-						script.onerror = ping(reject,src,true);
-						doc.head.appendChild(script);
-					}
-					else if (xtn === "css") {
-						var css = doc.createElement("link");
-						css.rel = "stylesheet";
-						css.href = src;
-						doc.head.appendChild(css);
-						Promise.resolve(src);
-					}
+		if (config.isRaw) {
+			return getRawContent(src).then(function(result) {
+				if (xtn === "js") {
+					$u.element.create("script",{inside:doc.head,contents:result});
 				}
-				else {
-					if (xtn === "js") {
-						$u.element.create("script",{inside:doc.head,contents:result[0]});
-					}
-					else if (xtn === "css") {
-						$u.element.create("style",{inside:doc.head,contents:result[0]});
-					}
+				else if (xtn === "css") {
+					$u.element.create("style",{inside:doc.head,contents:result});
+				}
+				return Promise.resolve(src);
+			});
+		}
+		else {
+			return new Promise(function(resolve,reject) {
+				if (xtn === "js") {
+					var script = doc.createElement("script");
+					script.src = src;
+					script.onload = ping(resolve,src);
+					script.onerror = ping(reject,src,true);
+					doc.head.appendChild(script);
+				}
+				else if (xtn === "css") {
+					var css = doc.createElement("link");
+					css.rel = "stylesheet";
+					css.href = src;
+					doc.head.appendChild(css);
 					resolve(src);
 				}
+				else {
+					reject(src);
+				}
 			});
-		});
+		}
 	};
 
 	var getFiles = function(category, id) {
@@ -189,13 +168,6 @@
 		iframe = $u.element.create("iframe",{inside:output,className:"wide"});
 
 		timer = setTimeout(function() {
-			if (!config.isRepo) {
-				$u.element.create("base",{
-					inside:iframe.contentDocument.head,
-					prop:{href:config.baseUrl}
-				});
-			}
-
 			// general theme CSS must be loaded before any plugin CSS
 			getFiles("themes", themeName).css.map(loadAsset);
 
@@ -284,7 +256,7 @@
 		})
 	};
 
-	loadAsset((config.isRepo ? "" : config.baseUrl) + "components.js", document).then(function() {
+	loadAsset("components.js", document).then(function() {
 		Object.keys(components.languages).filter(notMeta).forEach(function(lang) {
 			components.languages[lang].children = components.languages[lang].children || [];
 			components.languages[lang].require = [].concat(components.languages[lang].require || []);
