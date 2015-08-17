@@ -172,7 +172,7 @@
 
 	var generateFileList = function() {
 		promises = {};
-		var themeName = $("input[name='themes']:checked").value;
+		var themeName = $$("input[name='themes']:checked,input[name='themes']")[0].value;
 		config.theme = themeName.replace(/^prism-?/, "") || "default";
 		
 		var langwas = langselect.value || localStorage["language"];
@@ -330,7 +330,7 @@
 		input.addEventListener("input", updateCode);
 	}).catch(function(what) {
 		alert("Something went wrong loading " + (what || "... something :("));
-		if (what && what.match("components")) {
+		if (typeof what === "string" && what.match("components")) {
 			base.value = defaultBaseUrl;
 			saveConfig();
 			location.reload();
