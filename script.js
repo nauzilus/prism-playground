@@ -17,7 +17,6 @@
 				language: undefined,
 				plugins: {},
 				themes: {},
-				code: '<div id="foo"><h3>Some Heading</h3>\n\t<ul>\n\t\t<li>Hello World!</li>\n\t</ul>\n</div>',
 				attr: {
 					"line-highlight": {
 						"data-line": "1-2,4"
@@ -28,6 +27,7 @@
 				}
 			};
 		}
+		config.code = config.code || '<div id="foo"><h3>Some Heading</h3>\n\t<ul>\n\t\t<li>Hello World!</li>\n\t</ul>\n</div>';
 		base.value = config.baseUrl;
 		code.value = config.code;
 		return config;
@@ -283,6 +283,9 @@
 			var target = e.target;
 			if (target.name === "languages") {
 				checkDeps(target.value, target.checked);
+				if (target.checked) {
+					config.language = target.value;
+				}
 			}
 			config[target.name][target.value] = target.checked;
 			generateFileList();
