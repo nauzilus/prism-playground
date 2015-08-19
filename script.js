@@ -16,20 +16,33 @@
 				languages: {},
 				language: undefined,
 				plugins: {},
-				themes: {},
-				attr: {
-					"line-highlight": {
-						"data-line": "1-2,4"
-					},
-					"line-numbers": {
-						"class": "line-numbers"
-					}
-				}
+				themes: {}
 			};
 		}
+		config.attr = {
+			"line-highlight": {
+				"data-line": "1-2,4"
+			},
+			"line-numbers": {
+				"class": "line-numbers"
+			},
+			"file-highlight": {
+				"data-src": config.baseUrl + "index.html",
+				"function": "fileHighlight"
+			},
+			"jsonp-highlight": {
+				"data-jsonp": "https://status.github.com/api/status.json",
+				"function": function(Prism) {
+					Prism.plugins.jsonphighlight.registerAdapter(function (x) { return JSON.stringify(x,null,2); });
+					Prism.plugins.jsonphighlight.highlight();
+				}
+			}
+		};
 		config.code = config.code || '<div id="foo"><h3>Some Heading</h3>\n\t<ul>\n\t\t<li>Hello World!</li>\n\t</ul>\n</div>';
 		base.value = config.baseUrl;
-		code.value = config.code;
+		[language,code,classes,attributes].forEach(function(input) {
+			input.value = config[input.id] || "";
+		});
 		return config;
 	};
 	var saveConfig = function() {
@@ -40,8 +53,10 @@
 				config[category][input.value]=input.checked;
 			})
 		});
-		config.language = langselect.value;
-		config.code = code.value;
+		config.language = language.value;
+		[language,code,classes,attributes].forEach(function(input) {
+			config[input.id] = input.value;
+		});
 		localStorage["config"] = JSON.stringify(config);
 	};
 
@@ -154,9 +169,9 @@
 		var themeName = ($("input[name='themes']:checked") || $("input[name='themes']")).value;
 		config.theme = themeName.replace(/^prism-?/, "") || "default";
 		
-		var langwas = langselect.value || config.language;
-		while(langselect.options.length)
-			langselect.options[0].remove();
+		var langwas = language.value || config.language;
+		while(language.options.length)
+			language.options[0].remove();
 
 		if (iframe != null) {
 			iframe.remove();
@@ -174,7 +189,7 @@
 			loadAsset("components/prism-core.js").then(function() {
 				return Promise.all($$("input[name='languages']:checked").reduce(function(p, input){
 					$u.element.create("option",{
-						inside:langselect,
+						inside:language,
 						contents:input.value,
 						prop:{
 							value:input.value,
@@ -189,38 +204,106 @@
 					files.css.map(loadAsset)
 					return p.concat(files.js.map(loadAsset));
 				}, []));
-			}).then(updateCode)
+			}).then(prepareCode)
 		}, 10);
 	}
 
-	var updateCode = function() {
+	var addClass = function(name) {
+		var _classes = getClasses();
+		_classes[name] = true;
+		saveClasses(_classes);
+	};
+	var removeClass = function(name) {
+		var _classes = getClasses();
+		delete _classes[name];
+		saveClasses(_classes);
+	};
+	var getClasses = function() {
+		return classes.value.split(" ").reduce(function(o,v) { if (v.length) o[v] = true; return o; }, {});
+	};
+	var saveClasses = function(_classes) {
+		classes.value = Object.keys(_classes).join(" ");;
+	};
+
+	var addAttr = function(name,value) {
+		var _attr = getAttrs();
+		_attr[name] = _attr[name] || [name, "'", value];
+		setAttrs(_attr);
+	};
+	var removeAttr = function(name) {
+		var _attr = getAttrs();
+		delete _attr[name];
+		setAttrs(_attr);
+	};
+	var getAttrs = function() {
+		var _attributes = {}, m, re = /(data-[\w-]+)=(['"])(.*?)\2/g
+		while (m=re.exec(attributes.value))
+			_attributes[m[1]] = m.slice(1);
+		return _attributes;
+	}
+	var setAttrs = function(attr) {
+		attributes.value = Object.keys(attr).map(function(k) {
+			var x = attr[k];
+			return k + "=" + x[1] + x[2] + x[1];
+		}).join(" ");
+	};
+
+	var prepareCode = function() {
+		var functions = $$("input[name='plugins']:checked").reduce(function(o, input) {
+			var fn = (config.attr[input.value] || {}).function;
+			if (fn) o.push(fn);
+			return o;
+		}, []);
+
 		var body = $("body", iframe.contentDocument);
-		while (body.childNodes.length)
-			body.childNodes[0].remove();
 
-		var container = $u.element.create("div",{inside:body});
-		var pre = $u.element.create("pre", {
-			inside: container,
-			className: "language-" + langselect.value
-		});
-		
-		$u.element.create("code", { inside: pre, contents: code.value });
+		if (!(functions.length && body.firstChild)) {
+			while (body.firstChild)
+				body.firstChild.remove();
 
-		$$("input[name='plugins']:checked")
-			.map(function(v) { return config.attr[v.value] || {} })
-			.forEach(function(attr) {
-				Object.keys(attr).forEach(function(k) {
-					if (k === "class") {
-						pre.classList.add(attr.class)
-					}
-					else {
-						pre.setAttribute(k, attr[k]);
-					}
-				})
+			var container = $u.element.create("div",{inside:body});
+			var pre = $u.element.create("pre", {
+				inside: container
 			});
-		saveConfig();
+			$u.element.create("code", { inside: pre });
+		}
 
-		iframe.contentWindow.Prism.highlightAll();
+		pre = $("pre", iframe.contentDocument);
+		pre.className = "language-" + language.value;
+		$("code", iframe.contentDocument).className = "";
+
+		var _classes = getClasses();
+		classes.value = Object.keys(_classes).map(function(v) {
+			pre.classList.add(v);
+			return v;
+		}).join(" ");
+
+		for(var a=pre.attributes,i=a.length-1; i>=0;i--)
+			if (a[i].name.indexOf("data-") === 0)
+				pre.removeAttribute(a[i].name)
+
+		var _attr = getAttrs();
+		Object.keys(_attr).forEach(function(k) {
+			pre.setAttribute(k, _attr[k][2]);
+		});
+
+		code.style.display = functions.length ? "none" : "";
+		updateCode(function() {
+			functions.forEach(function(fn) {
+				if (typeof fn === "function") {
+					fn(iframe.contentWindow.Prism);
+				}
+				else {
+					iframe.contentWindow.Prism[fn]();
+				}
+			})
+		});
+	};
+
+	var updateCode = function(cb) {
+		$("code", iframe.contentDocument).textContent = code.value;
+		saveConfig();
+		iframe.contentWindow.Prism.highlightAll(false, cb);
 	}
 
 	var createListItem = function(list, def, category, id, type) {
@@ -229,7 +312,7 @@
 		var label = $u.element.create("label",{
 			inside:item
 		});
-		var cb = $u.element.create("input",{
+		$u.element.create("input",{
 			prop: {
 				type: type,
 				name: category,
@@ -239,7 +322,18 @@
 			inside:label
 		});
 		$u.element.create({contents:title,inside:label})
-		return item;
+	};
+
+	var updatePlugin = function(input) {
+		var attr = config.attr[input.value] || {};
+		Object.keys(attr).forEach(function(k) {
+			if (k === "class") {
+				(input.checked ? addClass : removeClass)(attr[k]);
+			}
+			else if (k !== "function") {
+				(input.checked ? addAttr : removeAttr)(k, attr[k]);
+			}
+		})
 	};
 
 	var checkDeps = function(lang, enabled) {
@@ -276,6 +370,7 @@
 				createListItem(list, components[category], category, id, components[category].meta.exclusive ? "radio" : "checkbox");
 			});
 		});
+		$$("input[name='plugins']:checked").forEach(updatePlugin);
 
 		generateFileList();
 
@@ -283,25 +378,18 @@
 			var target = e.target;
 			if (target.name === "languages") {
 				checkDeps(target.value, target.checked);
-				if (target.checked) {
-					langselect.value = config.language = target.value;
-				}
+			}
+			else if (target.name === "plugins") {
+				updatePlugin(target);
 			}
 			config[target.name][target.value] = target.checked;
 			generateFileList();
 		});
 
-		langselect.addEventListener("change", function() {
-			var code = $("code", iframe.contentDocument);
-			var pre = $("pre", iframe.contentDocument);
-			[code,pre].forEach(function(v) {
-				v.className = v.className.replace(/\blang(uage)-\w+\b/g, "")
-			});
-			code.classList.add("language-"+langselect.value);
-			iframe.contentWindow.Prism.highlightAll();
-		})
-
-		input.addEventListener("input", updateCode);
+		[language,classes,attributes].forEach(function(v) {
+			v.addEventListener("change", prepareCode);
+		});
+		code.addEventListener("input", function() { updateCode() });
 	}).catch(function(what) {
 		alert("Something went wrong loading " + (what || "... something :("));
 		if (typeof what === "string" && what.match("components")) {
