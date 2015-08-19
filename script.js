@@ -154,7 +154,7 @@
 		var themeName = ($("input[name='themes']:checked") || $("input[name='themes']")).value;
 		config.theme = themeName.replace(/^prism-?/, "") || "default";
 		
-		var langwas = langselect.value || localStorage["language"];
+		var langwas = langselect.value || config.language;
 		while(langselect.options.length)
 			langselect.options[0].remove();
 
@@ -284,7 +284,7 @@
 			if (target.name === "languages") {
 				checkDeps(target.value, target.checked);
 				if (target.checked) {
-					config.language = target.value;
+					langselect.value = config.language = target.value;
 				}
 			}
 			config[target.name][target.value] = target.checked;
@@ -292,7 +292,6 @@
 		});
 
 		langselect.addEventListener("change", function() {
-			localStorage["language"] = langselect.value;
 			var code = $("code", iframe.contentDocument);
 			var pre = $("pre", iframe.contentDocument);
 			[code,pre].forEach(function(v) {
