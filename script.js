@@ -28,13 +28,17 @@
 			},
 			"file-highlight": {
 				"data-src": config.baseUrl + "index.html",
-				"function": "fileHighlight"
+				"function": function(Prism) {
+					Prism.fileHighlight();
+					return true;
+				}
 			},
 			"jsonp-highlight": {
 				"data-jsonp": "https://status.github.com/api/status.json",
 				"function": function(Prism) {
 					Prism.plugins.jsonphighlight.registerAdapter(function (x) { return JSON.stringify(x,null,2); });
 					Prism.plugins.jsonphighlight.highlight();
+					return true;
 				}
 			}
 		};
@@ -289,14 +293,9 @@
 
 		code.style.display = functions.length ? "none" : "";
 		updateCode(function() {
-			functions.forEach(function(fn) {
-				if (typeof fn === "function") {
-					fn(iframe.contentWindow.Prism);
-				}
-				else {
-					iframe.contentWindow.Prism[fn]();
-				}
-			})
+			functions.reduce(function(done, fn) {
+				return done || fn(iframe.contentWindow.Prism);
+			}, false)
 		});
 	};
 
