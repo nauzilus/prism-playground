@@ -28,17 +28,23 @@
 			},
 			"file-highlight": {
 				"data-src": config.baseUrl + "index.html",
-				"function": function(Prism) {
-					Prism.fileHighlight();
-					return true;
+				"function": function(Prism, pre) {
+					if (pre.getAttribute("data-src")) {
+						Prism.fileHighlight();
+						return true;
+					}
+					return false;
 				}
 			},
 			"jsonp-highlight": {
 				"data-jsonp": "https://status.github.com/api/status.json",
-				"function": function(Prism) {
-					Prism.plugins.jsonphighlight.registerAdapter(function (x) { return JSON.stringify(x,null,2); });
-					Prism.plugins.jsonphighlight.highlight();
-					return true;
+				"function": function(Prism, pre) {
+					if (pre.getAttribute("data-jsonp")) {
+						Prism.plugins.jsonphighlight.registerAdapter(function (x) { return JSON.stringify(x,null,2); });
+						Prism.plugins.jsonphighlight.highlight();
+						return true;
+					}
+					return false;
 				}
 			}
 		};
@@ -71,6 +77,7 @@
 
 	var ping = function(func,what,err) {
 		return function() {
+			trackProgress(0);
 			console.log(what, typeof err === "boolean" ? (err ? "failed" : "OK") : (err || "ok"));
 			func(what);
 		}
@@ -104,7 +111,29 @@
 				}
 			});
 		});
-	}
+	};
+
+	var todo = 0, done = 0, delay = 0;
+	var trackProgress = function(newFile) {
+		newFile ? todo++ : done++;
+
+		clearTimeout(delay);
+		delay = 0;
+		if (todo === done) {
+			delay = setTimeout(function() {
+				if (todo === done) {
+					progress.value = todo = done = delay = 0;
+					progress.style.display = "none";
+				}
+			}, 10);
+		}
+		else
+		{
+			progress.value = Math.floor(done / todo * 100);
+			progress.style.display = "";
+		}
+	};
+
 	var loadAsset = function(src, doc) {
 		src = config.baseUrl + src;
 		// oh the hacks! Array.map(loadAsset) means doc will be an index, so just ignore
@@ -112,6 +141,7 @@
 		var xtn = (src.toLowerCase().match(/\.(css|js)$/)||[,''])[1];
 		if (!xtn) return Promise.reject(src);
 
+		trackProgress(1);
 		if (config.isRaw) {
 			return getRawContent(src).then(function(result) {
 				if (xtn === "js") {
@@ -120,6 +150,7 @@
 				else if (xtn === "css") {
 					$u.element.create("style",{inside:doc.head,contents:result});
 				}
+				trackProgress(0);
 				return Promise.resolve(src);
 			});
 		}
@@ -137,10 +168,10 @@
 					css.rel = "stylesheet";
 					css.href = src;
 					doc.head.appendChild(css);
-					resolve(src);
+					ping(resolve,src)();
 				}
 				else {
-					reject(src);
+					ping(reject,src)();
 				}
 			});
 		}
@@ -193,7 +224,7 @@
 				return Promise.all($$("input[name='languages']:checked").reduce(function(p, input){
 					$u.element.create("option",{
 						inside:language,
-						contents:input.value,
+						contents:components.languages[input.value].title,
 						prop:{
 							value:input.value,
 							selected: input.value === config.language
@@ -288,12 +319,11 @@
 			return o;
 		}, []);
 
-		code.style.display = functions.length ? "none" : "";
-		
 		updateCode(function() {
-			functions.reduce(function(done, fn) {
-				return done || fn(iframe.contentWindow.Prism);
-			}, false)
+			var renderByFunction = functions.reduce(function(done, fn) {
+				return done || fn(iframe.contentWindow.Prism, pre);
+			}, false);
+			code.style.display = renderByFunction ? "none" : "";	
 		});
 	};
 
