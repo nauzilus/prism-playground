@@ -173,9 +173,8 @@
 		var themeName = ($("input[name='themes']:checked") || $("input[name='themes']")).value;
 		config.theme = themeName.replace(/^prism-?/, "") || "default";
 		
-		var langwas = language.value || config.language;
-		while(language.options.length)
-			language.options[0].remove();
+		while(language.firstChild)
+			language.firstChild.remove();
 
 		if (iframe != null) {
 			iframe.remove();
@@ -197,7 +196,7 @@
 						contents:input.value,
 						prop:{
 							value:input.value,
-							selected: input.value === langwas
+							selected: input.value === config.language
 						}});
 					p.push(loadLanguage(input.value));
 					return p;
