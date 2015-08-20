@@ -239,7 +239,7 @@
 					return p.concat(files.js.map(loadAsset));
 				}, []));
 			}).then(prepareCode)
-		}, 10);
+		}, 100);
 	}
 
 	var addClass = function(name) {
