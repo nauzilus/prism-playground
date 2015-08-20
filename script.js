@@ -253,27 +253,19 @@
 	};
 
 	var prepareCode = function() {
-		var functions = $$("input[name='plugins']:checked").reduce(function(o, input) {
-			var fn = (config.attr[input.value] || {}).function;
-			if (fn) o.push(fn);
-			return o;
-		}, []);
-
 		var body = $("body", iframe.contentDocument);
 
-		if (!(functions.length && body.firstChild)) {
-			while (body.firstChild)
-				body.firstChild.remove();
-
-			var container = $u.element.create("div",{inside:body});
-			var pre = $u.element.create("pre", {
-				inside: container
+		if (!body.firstChild) {
+			$u.element.create("code", {
+				inside: $u.element.create("pre", {
+					inside: $u.element.create("div",{inside:body})
+				})
 			});
-			$u.element.create("code", { inside: pre });
 		}
 
 		pre = $("pre", iframe.contentDocument);
 		pre.className = "language-" + language.value;
+
 		$("code", iframe.contentDocument).className = "";
 
 		var _classes = getClasses();
@@ -291,7 +283,14 @@
 			pre.setAttribute(k, _attr[k][2]);
 		});
 
+		var functions = $$("input[name='plugins']:checked").reduce(function(o, input) {
+			var fn = (config.attr[input.value] || {}).function;
+			if (fn) o.push(fn);
+			return o;
+		}, []);
+
 		code.style.display = functions.length ? "none" : "";
+		
 		updateCode(function() {
 			functions.reduce(function(done, fn) {
 				return done || fn(iframe.contentWindow.Prism);
