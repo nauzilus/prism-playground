@@ -132,10 +132,14 @@
 		trackProgress(1);
 		if (xtn && config.isRaw) {
 			return getRawContent(src).then(function(result) {
-				return Promise.resolve($u.element.create(
-					xtn === "js" ? "script" : "style", {
-					contents: result
-				}));
+				return new Promise(function(resolve,reject) {
+					$u.element.create(
+						xtn === "js" ? "script" : "style", {
+						inside: doc.head,
+						contents: result
+					});
+					ping(resolve,src)();
+				});
 			});
 		}
 		else if (xtn === "js") {
@@ -430,6 +434,7 @@
 
 	}).catch(function(what) {
 		alert("Something went wrong loading " + (what || "... something :("));
+		console.error(what);
 	});
 
 	// always make this available
