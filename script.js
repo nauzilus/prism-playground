@@ -1,5 +1,5 @@
 (function() {
-	var defaultBaseUrl = "http://prismjs.com/", iframe = null, timer = 0;
+	var defaultBaseUrl = "http://prismjs.com/", iframe = null, timer_iframe = 0, timer_building = 0;;
 
 	var getConfig = function() {
 		try {
@@ -123,6 +123,31 @@
 		}
 	};
 
+	var loadComponents = function() {
+		var promises = {};
+		return Promise.all([($("input[name='themes']:checked") || $("input[name='themes']"))].concat(
+			$$("input[name='languages']:checked")
+		).concat(
+			$$("input[name='plugins']:checked")
+		).map(function(input) {
+			return loadComponent(promises, input.name, input.value);
+		})).catch(function(error) { console.log("failed", error) });
+	};
+
+	var loadComponent = function(cache, category, id) {
+		var key = category + "-" + id;
+		if (!cache[key]) {
+			var parents = components[category][id].require.reduce(function(sequence,id) {
+				return sequence.concat(loadComponent(cache, category, id));
+			}, [Promise.resolve()]);
+			cache[key] = Promise.all(parents).then(function() {
+				return Promise.all(getFiles(category, id).map(loadAsset));
+			});
+		}
+
+		return cache[key];
+	};
+
 	var loadAsset = function(src, doc) {
 		src = config.baseUrl + src;
 		// oh the hacks! Array.map(loadAsset) means doc will be an index, so just ignore
@@ -165,12 +190,9 @@
 	};
 
 	var getFiles = function(category, id) {
-		var files = (opt(category, id, "require") || []).reduce(function(list, dependant) {
-			return list.concat(getFiles(category, dependant));
-		}, []);
-
 		var template = opt(category, id, "path").replace(/\{id}/g, id);
 
+		var files = [];
 		var m = template.match(/\.(css|js)$/);
 		if (m) {
 			files.push(template);
@@ -191,6 +213,15 @@
 	};
 
 	var doBuild = function() {
+		if (timer_building) {
+			clearTimeout(timer_building);
+		}
+		timer_building = setTimeout(function() {
+			timer_building = 0;
+			doBuildImmediate();
+		}, 1000);
+	}
+	var doBuildImmediate = function() {
 		var themeName = ($("input[name='themes']:checked") || $("input[name='themes']")).value;
 		config.theme = themeName.replace(/^prism-?/, "") || "default";
 	
@@ -211,38 +242,17 @@
 		if (iframe != null) {
 			iframe.remove();
 		}
-		if (timer) {
-			clearTimeout(timer);
+		if (timer_iframe) {
+			clearTimeout(timer_iframe);
 		}
 
 		iframe = $u.element.create("iframe",{inside:output,className:"wide"});
 
-		timer = setTimeout(function() {
-			Promise.all(generateFileList().map(loadAsset)).then(prepareCode);
+		timer_iframe = setTimeout(function() {
+			loadAsset("components/prism-core.js").then(function() {
+				return loadComponents();
+			}).then(prepareCode);
 		}, 100);
-	};
-
-	var generateFileList = function() {
-		var order = 0;
-		var files = {
-			"components/prism-core.js": order
-		};
-
-		[($("input[name='themes']:checked") || $("input[name='themes']"))].concat(
-			$$("input[name='languages']:checked")
-		).concat(
-			$$("input[name='plugins']:checked")
-		).reduce(function(list, input) {
-			return list.concat(getFiles(input.name, input.value));
-		}, []).forEach(function(src) {
-			if (!files[src]) {
-				files[src] = ++order;
-			}
-		});
-
-		return Object.keys(files).sort(function(x,y) {
-			return files[x] - files[y];
-		});
 	};
 
 	var addClass = function(name) {
@@ -366,19 +376,19 @@
 		})
 	};
 
-	var checkDeps = function(input) {
-		var lang = input.value, enabled = input.checked;
+	var checkDeps = function(category, input) {
+		var id = input.value, enabled = input.checked;
 
-		config.languages[lang] = enabled;
+		config[category][id] = enabled;
 
-		var deps = components.languages[lang][enabled ? "require" : "children"];
+		var deps = components[category][id][enabled ? "require" : "children"];
 		deps.forEach(function(depName) {
-			var dependant = $("input[name='languages'][value='" + depName + "']");
+			var dependant = $("input[name='"+category+"'][value='" + depName + "']");
 			
 			if (dependant.checked != enabled) {
 				dependant.checked = enabled;
 				
-				checkDeps(dependant);
+				checkDeps(category, dependant);
 			}
 		})
 	};
@@ -386,17 +396,22 @@
 	var config = getConfig();
 
 	loadAsset("components.js").then(function() {
-		Object.keys(components.languages).filter(notMeta).forEach(function(lang) {
-			components.languages[lang].children = components.languages[lang].children || [];
-			components.languages[lang].require = [].concat(components.languages[lang].require || []);
-		});
-		Object.keys(components.languages).filter(notMeta).forEach(function(lang) {
-			components.languages[lang].require.forEach(function(parent) {
-				components.languages[parent].children.push(lang);
-			})
+		["languages","plugins","themes"].forEach(function(category) {
+			Object.keys(components[category]).filter(notMeta).forEach(function(id) {
+				if (typeof components[category][id] === "string") {
+					components[category][id] = { title: components[category][id] };
+				}
+				components[category][id].children = components[category][id].children || [];
+				components[category][id].require = [].concat(components[category][id].require || []);
+			});
+			Object.keys(components[category]).filter(notMeta).forEach(function(id) {
+				components[category][id].require.forEach(function(parent) {
+					components[category][parent].children.push(id);
+				})
+			});
 		});
 		
-		["languages", "plugins", "themes"].forEach(function(category){
+		["languages", "plugins", "themes"].forEach(function(category) {
 			var list = $u.element.create("ul",{inside:configuration});
 			Object.keys(components[category]).filter(notMeta).forEach(function(id) {
 				if (config.first) {
@@ -410,15 +425,15 @@
 
 		config.first = false;
 
-		doBuild();
+		doBuildImmediate();
 
 		configuration.addEventListener("change", function(e) {
 			var target = e.target;
 			
-			if (target.name === "languages") {
-				checkDeps(target);
+			if (["languages","plugins"].indexOf(target.name) >= 0) {
+				checkDeps(target.name, target);
 			}
-			else if (target.name === "plugins") {
+			if (target.name === "plugins") {
 				updatePlugin(target);
 			}
 
