@@ -72,11 +72,11 @@
 
 	var notMeta = function(v) { return v !== "meta"; }
 
-	var ping = function(func,what,err) {
+	var onAssetDone = function(resolveOrReject,src,error) {
 		return function() {
 			trackProgress(0);
-			console.log(what, typeof err === "boolean" ? (err ? "failed" : "OK") : (err || "ok"));
-			func(what);
+			console.log(src, typeof error === "boolean" ? (error ? "failed" : "OK") : (error || "ok"));
+			resolveOrReject(src);
 		}
 	};
 
@@ -123,17 +123,31 @@
 		}
 	};
 
-	var loadComponents = function() {
-		var promises = {};
-		return Promise.all([($("input[name='themes']:checked") || $("input[name='themes']"))].concat(
-			$$("input[name='languages']:checked")
-		).concat(
-			$$("input[name='plugins']:checked")
-		).map(function(input) {
-			return loadComponent(promises, input.name, input.value);
-		})).catch(function(error) { console.log("failed", error) });
+	var selectedTheme = function() {
+		return $("input[name='themes']:checked") || $("input[name='themes']");
+	};
+	var selectedLanguages = function() {
+		return $$("input[name='languages']:checked");
+	};
+	var selectedPlugins = function() {
+		return $$("input[name='plugins']:checked");
 	};
 
+	var loadComponents = function() {
+		var promises = {};
+		var loader = function(input) {
+			return loadComponent(promises, input.name, input.value);
+		};
+		
+		return Promise.all([]
+			.concat(selectedTheme())
+			.concat(selectedLanguages())
+			.concat(selectedPlugins())
+			.map(loader)
+		).catch(function(error) {
+			console.log("failed", error)
+		});
+	};
 	var loadComponent = function(cache, category, id) {
 		var key = category + "-" + id;
 		if (!cache[key]) {
@@ -148,10 +162,11 @@
 		return cache[key];
 	};
 
-	var loadAsset = function(src, doc) {
+	var loadAsset = function(src) {
 		src = config.baseUrl + src;
-		// oh the hacks! Array.map(loadAsset) means doc will be an index, so just ignore
-		doc = (typeof doc === "number" ? 0 : doc) || (iframe ? iframe.contentDocument : null) || document;
+		// hack. first time this is called is for components so iframe isn't defined yet. once we start doing Prism builds, iframe will exist
+		doc = iframe ? iframe.contentDocument : document;
+		
 		var xtn = (src.toLowerCase().match(/\.(css|js)$/)||[,''])[1];
 
 		trackProgress(1);
@@ -163,7 +178,7 @@
 						inside: doc.head,
 						contents: result
 					});
-					ping(resolve,src)();
+					onAssetDone(resolve,src)();
 				});
 			});
 		}
@@ -171,8 +186,8 @@
 			return new Promise(function(resolve, reject) {
 				var script = doc.createElement("script");
 				script.src = src;
-				script.onload = ping(resolve,src);
-				script.onerror = ping(reject,src,true);
+				script.onload = onAssetDone(resolve,src);
+				script.onerror = onAssetDone(reject,src,true);
 				doc.head.appendChild(script);
 			});
 		}
@@ -182,7 +197,7 @@
 				css.rel = "stylesheet";
 				css.href = src;
 				doc.head.appendChild(css);
-				ping(resolve,src)();
+				onAssetDone(resolve,src)();
 			});
 		}
 
@@ -222,13 +237,13 @@
 		}, 1000);
 	}
 	var doBuildImmediate = function() {
-		var themeName = ($("input[name='themes']:checked") || $("input[name='themes']")).value;
+		var themeName = selectedTheme().value;
 		config.theme = themeName.replace(/^prism-?/, "") || "default";
 	
 		while(language.firstChild)
 			language.firstChild.remove();
 
-		$$("input[name='languages']:checked").forEach(function(input) {
+		selectedLanguages().forEach(function(input) {
 			$u.element.create("option",{
 				inside: language,
 				contents: components.languages[input.value].title,
@@ -326,7 +341,7 @@
 			pre.setAttribute(k, _attr[k][2]);
 		});
 
-		var functions = $$("input[name='plugins']:checked").reduce(function(o, input) {
+		var functions = selectedPlugins().reduce(function(o, input) {
 			var fn = (config.attr[input.value] || {}).function;
 			if (fn) o.push(fn);
 			return o;
@@ -343,7 +358,7 @@
 	var updateCode = function(cb) {
 		$("code", iframe.contentDocument).textContent = code.value;
 		saveConfig();
-		iframe.contentWindow.Prism.highlightAll(false, cb);
+		iframe.contentWindow.Prism.highlightAll(false, typeof cb === "function" ? cb :null);
 	}
 
 	var createListItem = function(list, def, category, id, type) {
@@ -376,8 +391,8 @@
 		})
 	};
 
-	var checkDeps = function(category, input) {
-		var id = input.value, enabled = input.checked;
+	var checkDeps = function(input) {
+		var category = input.name, id = input.value, enabled = input.checked;
 
 		config[category][id] = enabled;
 
@@ -388,7 +403,7 @@
 			if (dependant.checked != enabled) {
 				dependant.checked = enabled;
 				
-				checkDeps(category, dependant);
+				checkDeps(dependant);
 			}
 		})
 	};
@@ -409,9 +424,7 @@
 					components[category][parent].children.push(id);
 				})
 			});
-		});
-		
-		["languages", "plugins", "themes"].forEach(function(category) {
+
 			var list = $u.element.create("ul",{inside:configuration});
 			Object.keys(components[category]).filter(notMeta).forEach(function(id) {
 				if (config.first) {
@@ -421,7 +434,7 @@
 			});
 		});
 
-		$$("input[name='plugins']:checked").forEach(updatePlugin);
+		selectedPlugins().forEach(updatePlugin);
 
 		config.first = false;
 
@@ -431,7 +444,7 @@
 			var target = e.target;
 			
 			if (["languages","plugins"].indexOf(target.name) >= 0) {
-				checkDeps(target.name, target);
+				checkDeps(target);
 			}
 			if (target.name === "plugins") {
 				updatePlugin(target);
@@ -441,11 +454,11 @@
 			doBuild();
 		});
 
-		[language,classes,attributes].forEach(function(v) {
-			v.addEventListener("change", prepareCode);
+		[language,classes,attributes].forEach(function(input) {
+			input.addEventListener("change", prepareCode);
 		});
 
-		code.addEventListener("input", function() { updateCode() });
+		code.addEventListener("input", updateCode);
 
 	}).catch(function(what) {
 		alert("Something went wrong loading " + (what || "... something :("));
