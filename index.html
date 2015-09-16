@@ -14,7 +14,11 @@
 			<div id="input">
 				<div><select id="language" class="wide"></select></div>
 				<div><textarea id="code" class="wide"></textarea></div>
-				<div><input id="classes" class="wide"/><input id="attributes" class="wide" /></select></div>
+				<div>
+					<label><input id="codeishtml" type="checkbox" /> Treat code as markup (e.g. tags won't be encoded as &lt;/&gt;)</label>
+					<input id="classes" class="wide" placeholder="css class names e.g. line-numbers"/>
+					<input id="attributes" class="wide" placeholder="data attributes, e.g. data-line='1-2,4'" />
+				</div>
 			</div>
 			<div id="output" class="wide">
 				<progress id="progress" max="100" style="display: none;"/>

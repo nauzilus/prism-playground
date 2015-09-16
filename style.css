@@ -1,3 +1,7 @@
+* {
+	font-family: sans-serif;
+	font-size: 10pt;
+}
 ul {
 	max-height: 200px;
 	overflow: auto;

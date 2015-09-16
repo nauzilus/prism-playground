@@ -53,6 +53,7 @@
 		[language,code,classes,attributes].forEach(function(input) {
 			input.value = config[input.id] || "";
 		});
+		codeishtml.checked = !!config.codeishtml;
 		return config;
 	};
 
@@ -67,6 +68,7 @@
 		[language,code,classes,attributes].forEach(function(input) {
 			config[input.id] = input.value;
 		});
+		config.codeishtml = codeishtml.checked;
 		localStorage["config"] = JSON.stringify(config);
 	};
 
@@ -234,7 +236,7 @@
 		timer_building = setTimeout(function() {
 			timer_building = 0;
 			doBuildImmediate();
-		}, 1000);
+		}, 500);
 	}
 	var doBuildImmediate = function() {
 		var themeName = selectedTheme().value;
@@ -356,7 +358,13 @@
 	};
 
 	var updateCode = function(cb) {
-		$("code", iframe.contentDocument).textContent = code.value;
+		var _code = $("code", iframe.contentDocument);
+		if (codeishtml.checked) {
+			_code.innerHTML = code.value;
+		}
+		else {
+			_code.textContent = code.value;
+		}
 		saveConfig();
 		iframe.contentWindow.Prism.highlightAll(false, typeof cb === "function" ? cb :null);
 	}
@@ -451,10 +459,10 @@
 			}
 
 			config[target.name][target.value] = target.checked;
-			doBuild();
+			target.name === "themes" ? doBuildImmediate() : doBuild();
 		});
 
-		[language,classes,attributes].forEach(function(input) {
+		[language,classes,attributes,codeishtml].forEach(function(input) {
 			input.addEventListener("change", prepareCode);
 		});
 
