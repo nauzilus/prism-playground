@@ -1,7 +1,7 @@
 prism-playground
 ================
 
-Prism Playground allows you to live test custom builds of the [Prism] highlighter.
+[Prism Playground] allows you to live test custom builds of the [Prism] highlighter.
 
 It works similar to the Prism [test page], however Playground allows you to:
 
@@ -50,5 +50,6 @@ Finally, the rendered and highlighted code. What you came to see!
 
 This is a bit hacky and flakey, but it serves my purposes. Hopefully it helps someone out there also :)
 
+[Prism Playground]: http://nauzilus.github.io/prism-playground/
 [Prism]: http://prismjs.com/
 [test page]: http://prismjs.com/test.html
