@@ -28,7 +28,7 @@
 			},
 			"file-highlight": {
 				"data-src": config.baseUrl + "index.html",
-				"function": function(Prism, pre) {
+				"render": function(Prism, pre) {
 					if (pre.getAttribute("data-src")) {
 						Prism.fileHighlight();
 						return true;
@@ -38,7 +38,7 @@
 			},
 			"jsonp-highlight": {
 				"data-jsonp": "https://status.github.com/api/status.json",
-				"function": function(Prism, pre) {
+				"render": function(Prism, pre) {
 					if (pre.getAttribute("data-jsonp")) {
 						Prism.plugins.jsonphighlight.registerAdapter(function (x) { return JSON.stringify(x,null,2); });
 						Prism.plugins.jsonphighlight.highlight();
@@ -344,7 +344,7 @@
 		});
 
 		var functions = selectedPlugins().reduce(function(o, input) {
-			var fn = (config.attr[input.value] || {}).function;
+			var fn = (config.attr[input.value] || {}).render;
 			if (fn) o.push(fn);
 			return o;
 		}, []);
@@ -393,7 +393,7 @@
 			if (k === "class") {
 				(input.checked ? addClass : removeClass)(attr[k]);
 			}
-			else if (k !== "function") {
+			else if (k !== "render") {
 				(input.checked ? addAttr : removeAttr)(k, attr[k]);
 			}
 		})
