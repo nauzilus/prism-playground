@@ -3,10 +3,12 @@
 
 	var getConfig = function() {
 		try {
-			var config = JSON.parse(localStorage["config"]);
-			var repo = config.baseUrl.match("https://github.com/([^/]+)/([^/]+)/tree/([^/]+)(?:/|$)");
-			if (repo) {
+			var repo, config = JSON.parse(localStorage["config"]);
+			if (repo = config.baseUrl.match("https://github.com/([^/]+)/([^/]+)/tree/([^/]+)(?:/|$)")) {
 				config.baseUrl = "https://raw.githubusercontent.com/"+repo[1]+"/"+repo[2]+"/"+repo[3]+"/";
+			}
+			else if (repo = config.baseUrl.match("^([\\w\-]+):(?:([\\w\-]+):)?([\\w\-]+)/?$")) {
+				config.baseUrl = "https://raw.githubusercontent.com/"+repo[1]+"/"+(repo[2] || "prism") +"/"+repo[3]+"/";
 			}
 			config.isRaw = config.baseUrl.match("githubusercontent");
 		} catch(error) {
